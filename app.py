@@ -6,53 +6,38 @@ from flask_limiter.util import get_remote_address
 import datetime
 import os
 
-# ================================
-# INIT APP
-# ================================
+
 app = Flask(__name__)
 
-# ================================
-# RATE LIMITER
-# ================================
+
 limiter = Limiter(
     get_remote_address,
     app=app,
     default_limits=["20 per minute"]
 )
 
-# ================================
-# LOAD MODEL
-# ================================
+
 model = joblib.load("model/fraud_model.pkl")
 
-# ================================
-# API KEY
-# ================================
+
 API_KEY = "mysecurekey123"
 
-# ================================
-# FILES
-# ================================
+
 LOG_FILE = "logs/activity.log"
 BLOCKED_IP_FILE = "blocked_ips.txt"
 
-# Ensure folders/files exist
 if not os.path.exists("logs"):
     os.makedirs("logs")
 
 if not os.path.exists(BLOCKED_IP_FILE):
     open(BLOCKED_IP_FILE, "w").close()
 
-# ================================
-# LOGGING FUNCTION
-# ================================
+
 def log_event(message):
     with open(LOG_FILE, "a") as f:
         f.write(f"{datetime.datetime.now()} - {message}\n")
 
-# ================================
-# BLOCKED IP CHECK
-# ================================
+
 def is_blocked(ip):
     with open(BLOCKED_IP_FILE, "r") as f:
         blocked_ips = f.read().splitlines()
@@ -63,9 +48,7 @@ def block_ip(ip):
         f.write(ip + "\n")
     log_event(f"BLOCKED IP: {ip}")
 
-# ================================
-# REQUEST TRACKING (BRUTE FORCE DETECTION)
-# ================================
+
 request_counts = {}
 
 def track_requests(ip):
@@ -76,26 +59,20 @@ def track_requests(ip):
 
     request_counts[ip].append(now)
 
-    # Keep last 1 minute requests
     request_counts[ip] = [
         t for t in request_counts[ip]
         if (now - t).seconds < 60
     ]
 
-    # If too many requests → block
     if len(request_counts[ip]) > 10:
         block_ip(ip)
 
-# ================================
-# HOME ROUTE
-# ================================
+
 @app.route("/")
 def home():
     return render_template("dashboard.html")
 
-# ================================
-# LOG VIEW
-# ================================
+
 @app.route("/logs")
 def get_logs():
     if not os.path.exists(LOG_FILE):
@@ -106,24 +83,19 @@ def get_logs():
 
     return jsonify({"logs": lines[-30:]})
 
-# ================================
-# FRAUD DETECTION API
-# ================================
+
 @app.route("/predict", methods=["POST"])
 @limiter.limit("100 per minute")
 def predict():
     try:
         ip = request.remote_addr
 
-        # 🔴 BLOCKED IP CHECK
         if is_blocked(ip):
             log_event(f"Blocked IP tried access: {ip}")
             return jsonify({"error": "Your IP is blocked"}), 403
 
-        # 🔍 Track requests
         track_requests(ip)
 
-        # 🔐 API KEY CHECK
         user_api_key = request.headers.get("x-api-key")
         if user_api_key != API_KEY:
             log_event(f"Unauthorized access from {ip}")
@@ -144,7 +116,6 @@ def predict():
             "risk_score": float(probability)
         }
 
-        # 🚨 Suspicious Activity Detection
         if probability > 0.8:
             log_event(f"HIGH RISK from {ip} - Score: {probability}")
 
