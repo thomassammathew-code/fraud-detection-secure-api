@@ -125,8 +125,7 @@ def predict():
         log_event(f"Error: {str(e)}")
         return jsonify({"error": "Internal Server Error"}), 500
 
-# ================================
-# RUN APP
-# ================================
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
